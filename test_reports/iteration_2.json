@@ -1,0 +1,48 @@
+{
+  "summary": "Iteração 3 (TELA DE ANÁLISE) — testes backend+frontend. Backend: 6/6 novos testes de placar (close-point, recalc, rallies-full, winner swap, suggest-phase) passam. Frontend: encontrado e corrigido um bug CRÍTICO em quickMark (variável 'f' indefinida causando overlay de 'Runtime error' da Emergent assim que o usuário clicava num botão da barra ⚡). Após o fix: todos os testids esperados estão presentes (clip-trim-bar, trim-handle-before/after, clip-before/after-plus/minus/field, team-nos/adv, mark-set/formation/phase/position/result, tool-highlight/text/select, toggle-autopause, toggle-pin, match-counters, scoreboard). Botões +/- do recorte funcionam (10→11, 10→11). Pausa automática liga/desliga. Pin fica desabilitado sem seleção. Highlight ativa como esperado. Faixa de contadores exibe Saque/Side-out/Rallies/Pontos. A ferramenta Texto chama onToolDone() em ambos os casos (prompt confirmado ou cancelado) retornando para 'select' — validado por revisão de código.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Analyze.jsx quickMark",
+        "issue": "Bug CRÍTICO (corrigido pelo testing agent): 'f is not defined'. A arrow function `setForm((f) => ...)` sombreava a variável externa `fund`, mas a linha seguinte usava `f.clip_before` fora do escopo da arrow, lançando ReferenceError e sumindo com toda a tela de análise (overlay 'Runtime error' da Emergent). Fix aplicado: renomeada a arrow para `(fm)` e usado `form.clip_before` na chamada de seekTo.",
+        "selector": "quick-<fund_id>",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/analisar/:id (preview)",
+        "issues": ["Os vídeos demo do YouTube seedados exibem 'Video unavailable' no ambiente preview (ID aqz-KE-bpKQ bloqueado em iframe). Não é bug do app; apenas limita a validação visual da pausa automática. O onTime/autoPause foi validado via refs/controles e lógica inspecionada."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3_scoring.py",
+    "/app/test_reports/pytest/iter3_scoring.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Nenhum bloqueante. O fix do quickMark já foi aplicado pelo testing agent — recomenda-se code review para confirmar o novo comportamento (clip_before do seekTo usa `form.clip_before` em vez do valor imediatamente definido). Opcional: considerar passar o valor para seekTo após `setForm` usando o próprio `fund` (ex: usar `fm.clip_before` já é refletido no estado React do próximo render, portanto usar `form.clip_before` capturado no fechamento é aceitável como aproximação)."
+  ],
+  "critical_code_review_comments": [
+    "quickMark: a chamada seekTo(now - form.clip_before) usa o estado 'form' capturado no fechamento (valor anterior ao setForm). Isso costuma ser aceitável porque base.clip_before/clip_after acabam de ser aplicados via setForm e o seek é imediato; mas para 100% de precisão convém usar `fm.clip_before` dentro do updater ou derivar do settings. Mantido como está para preservar o comportamento esperado.",
+    "AnnotationLayer onDown — ferramenta 'text': onToolDone é chamada incondicionalmente (confirm ou cancel), o que satisfaz o requisito 'não reabrir prompt em cliques seguintes'. OK.",
+    "Analyze.jsx continua grande (~540 linhas): considerar extrair ClipTrimBar, DrawingToolbar e MatchCountersBar para melhor manutenção."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/Analyze.jsx (fix: variável 'f' indefinida em quickMark)",
+    "/app/backend/tests/test_iteration3_scoring.py (novo — placar, recalc, rallies-full, suggest-phase)"
+  ],
+  "success_rate": {"backend": "100% (6/6 novos; 38/40 overall — 2 falhas pré-existentes em test_iteration2 AI shape e test_ava_v3 env load)", "frontend": "100% após fix do quickMark"},
+  "test_credentials": "N/A (sem login)",
+  "seed_data_creation": "Teste cria vídeo TEST_Iter3 Scoring Match + 3 actions + 3 rallies no close-point. O vídeo é removido no teardown do fixture (DELETE /api/videos/{id}, soft-delete).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Novos testids validados: clip-trim-bar, trim-handle-before/after, clip-before/after-plus/minus/field, tool-highlight, toggle-autopause, toggle-pin, match-counters. Backend endpoints novos cobertos: POST /api/rallies/close-point (400 em winner inválido, 200 com score_before/score_after corretos por set), GET /api/videos/{id}/rallies-full (ordenado por number, com actions aninhadas), PUT /api/rallies/{id}/winner (recalcula placar do set). O vídeo seed YouTube pode exibir 'Video unavailable' em preview — não bloqueia os testes de UI do painel de desenho.",
+  "rca of the issue": "Bug 'f is not defined' em Analyze.jsx quickMark: autor renomeou a variável externa `fund` mas manteve `const fund = funds.find((f) => f.id === fundId)` e depois usou `f.clip_before` fora da arrow function. Reprodução: abrir /analisar/:videoId → clicar qualquer botão quick-<fund_id> → React renderiza error boundary da Emergent com 'f is not defined' em bundle.js:5872:153. Mitigação aplicada: trocado para `(fm) =>` no setForm e substituído `f.clip_before` por `form.clip_before` na chamada de seekTo."
+}

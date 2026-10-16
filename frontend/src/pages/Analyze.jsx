@@ -198,10 +198,10 @@ export default function Analyze() {
     setMarkTime(now);
     setEditingId(null); setDrafting(true); setAnnos([]); setSelEl(null);
     const fund = funds.find((f) => f.id === fundId);
-    setForm((f) => ({ ...base, clip_before: f.clip_before, clip_after: f.clip_after, formation: f.formation, set_number: f.set_number, fundamento_id: fundId, team: "nos" }));
+    setForm((fm) => ({ ...base, clip_before: fm.clip_before, clip_after: fm.clip_after, formation: fm.formation, set_number: fm.set_number, fundamento_id: fundId, team: "nos" }));
     setShowCourt(fund?.uses_court !== false);
     suggestFor(fundId, "nos");
-    playerRef.current?.seekTo(Math.max(0, now - Number(f.clip_before || 0)));
+    playerRef.current?.seekTo(Math.max(0, now - Number(form.clip_before || 0)));
     toast.info(`${fund?.name} marcado em ${formatTime(now)} — fase sugerida, confira e salve`);
   };
 
