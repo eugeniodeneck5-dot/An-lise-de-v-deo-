@@ -14,7 +14,7 @@ import { Scoreboard } from "@/components/Scoreboard";
 import {
   Play, Pause, Rewind, FastForward, Plus, Trash2, Save, MousePointer2, ArrowUpRight,
   Minus, Square, Circle, Type, Spline, Undo2, Eraser, Clock, Check, Users, X, Scissors, Link2, MapPin,
-  Trophy, Repeat, ListOrdered, Sparkles, Settings2,
+  Trophy, Repeat, ListOrdered, Sparkles, Settings2, Highlighter, Pin, Timer, TimerOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -22,9 +22,37 @@ import { toast } from "sonner";
 const COLORS = ["#E50914", "#F59E0B", "#10B981", "#3B82F6", "#FFFFFF"];
 const TOOLS = [
   { id: "select", icon: MousePointer2 }, { id: "arrow", icon: ArrowUpRight }, { id: "line", icon: Minus },
-  { id: "rect", icon: Square }, { id: "ellipse", icon: Circle }, { id: "trajectory", icon: Spline }, { id: "text", icon: Type },
+  { id: "rect", icon: Square }, { id: "ellipse", icon: Circle }, { id: "highlight", icon: Highlighter },
+  { id: "trajectory", icon: Spline }, { id: "text", icon: Type },
 ];
+const TRIM_WIN = 30;
 const RESULTS = ["Ponto nosso", "Ponto adversário", "Continuidade"];
+
+const ClipTrimBar = ({ before, after, onBefore, onAfter }) => {
+  const ref = useRef(null);
+  const drag = useRef(null);
+  const posOf = (sec) => (TRIM_WIN + sec) / (2 * TRIM_WIN);
+  const onPointerDown = (which) => (e) => { e.preventDefault(); drag.current = which; e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const onPointerMove = (e) => {
+    if (!drag.current || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const sec = frac * 2 * TRIM_WIN - TRIM_WIN;
+    if (drag.current === "before") onBefore(Math.max(0, Math.min(TRIM_WIN, -sec)));
+    else onAfter(Math.max(0, Math.min(TRIM_WIN, sec)));
+  };
+  const onPointerUp = () => { drag.current = null; };
+  const leftPct = posOf(-before) * 100;
+  const rightPct = posOf(after) * 100;
+  return (
+    <div ref={ref} onPointerMove={onPointerMove} onPointerUp={onPointerUp} className="relative h-8 rounded-lg bg-background border border-border select-none" style={{ touchAction: "none" }} data-testid="clip-trim-bar">
+      <div className="absolute top-0 bottom-0 bg-primary/25 rounded" style={{ left: `${leftPct}%`, right: `${100 - rightPct}%` }} />
+      <div className="absolute top-1/2 -translate-y-1/2 w-0.5 h-5 bg-foreground/70" style={{ left: "50%" }} />
+      <div onPointerDown={onPointerDown("before")} data-testid="trim-handle-before" className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize flex items-center justify-center z-10" style={{ left: `${leftPct}%` }}><div className="w-1.5 h-6 rounded bg-primary" /></div>
+      <div onPointerDown={onPointerDown("after")} data-testid="trim-handle-after" className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize flex items-center justify-center z-10" style={{ left: `${rightPct}%` }}><div className="w-1.5 h-6 rounded bg-primary" /></div>
+    </div>
+  );
+};
 const base = { fundamento_id: "", classificacao_id: "", athlete_ids: [], tactical_position: "", phase: "", note: "", clip_before: 5, clip_after: 4, set_number: "", formation: "", result: "", court: null, team: "nos" };
 
 export default function Analyze() {
@@ -62,7 +90,13 @@ export default function Analyze() {
   const [rallies, setRallies] = useState([]);
   const [servingTeam, setServingTeam] = useState("adv");
   const [setNumber, setSetNumber] = useState(1);
+  const [autoPause, setAutoPause] = useState(true);
   const clipStop = useRef(null);
+  const lastTimeRef = useRef(0);
+  const activeAnnosRef = useRef([]);
+  const pausedForRef = useRef(new Set());
+  const autoPauseRef = useRef(true);
+  useEffect(() => { autoPauseRef.current = autoPause; }, [autoPause]);
 
   const reloadActions = useCallback(() => getActions({ video_id: videoId }).then(setActions), [videoId]);
   const reloadRallies = useCallback(() => getRalliesFull(videoId).then(setRallies), [videoId]);
@@ -91,10 +125,17 @@ export default function Analyze() {
     toast.success(`Modelo de análise: ${m === "A" ? "K1–K2" : "K0–K5"}`);
   };
 
-  // Placar sincronizado com o vídeo
+  // Placar sincronizado com o vídeo (recomputado no cliente p/ confiabilidade)
   const scoreAt = useCallback((t, set) => {
-    const rs = rallies.filter((r) => (r.set_number || 1) === set && r.end_ts != null && r.end_ts <= t).sort((a, b) => a.number - b.number);
-    return rs[rs.length - 1]?.score_after || { nos: 0, adv: 0 };
+    const rs = rallies.filter((r) => (r.set_number || 1) === set && r.number != null).sort((a, b) => a.number - b.number);
+    let nos = 0, adv = 0, shown = { nos: 0, adv: 0 };
+    for (const r of rs) {
+      if (r.end_ts == null || r.end_ts <= t) {
+        if (r.winner === "nos") nos += 1; else if (r.winner === "adv") adv += 1;
+        shown = { nos, adv };
+      }
+    }
+    return shown;
   }, [rallies]);
 
   const suggestFor = useCallback(async (fundId, teamVal) => {
@@ -128,11 +169,23 @@ export default function Analyze() {
   }, [actions.length]);
 
   const onTime = useCallback((t) => {
+    const prev = lastTimeRef.current; lastTimeRef.current = t;
     setTime(t);
-    if (clipStop.current != null && t >= clipStop.current) { playerRef.current?.pause(); clipStop.current = null; setPlaying(false); }
+    if (clipStop.current != null && t >= clipStop.current) { playerRef.current?.pause(); clipStop.current = null; setPlaying(false); return; }
+    if (autoPauseRef.current && activeAnnosRef.current.length) {
+      for (const el of activeAnnosRef.current) {
+        if (el.startTime == null || el.pinned) continue;
+        if (!pausedForRef.current.has(el.id) && el.startTime > prev && el.startTime <= t) {
+          playerRef.current?.pause(); setPlaying(false);
+          playerRef.current?.seekTo(el.startTime);
+          pausedForRef.current.add(el.id);
+          break;
+        }
+      }
+    }
   }, []);
 
-  const togglePlay = () => { if (!playerRef.current) return; if (playing) { playerRef.current.pause(); setPlaying(false); } else { clipStop.current = null; playerRef.current.play(); setPlaying(true); } };
+  const togglePlay = () => { if (!playerRef.current) return; if (playing) { playerRef.current.pause(); setPlaying(false); } else { clipStop.current = null; activeAnnosRef.current = annos; pausedForRef.current = new Set(); playerRef.current.play(); setPlaying(true); } };
   const seekBy = (d) => playerRef.current?.seekTo(Math.max(0, Math.min(duration || 1e9, time + d)));
   const changeRate = (r) => { setRate(r); playerRef.current?.setRate(r); };
   const fundClasses = useMemo(() => classes.filter((c) => c.fundamento_id === form.fundamento_id), [classes, form.fundamento_id]);
@@ -148,6 +201,7 @@ export default function Analyze() {
     setForm((f) => ({ ...base, clip_before: f.clip_before, clip_after: f.clip_after, formation: f.formation, set_number: f.set_number, fundamento_id: fundId, team: "nos" }));
     setShowCourt(fund?.uses_court !== false);
     suggestFor(fundId, "nos");
+    playerRef.current?.seekTo(Math.max(0, now - Number(f.clip_before || 0)));
     toast.info(`${fund?.name} marcado em ${formatTime(now)} — fase sugerida, confira e salve`);
   };
 
@@ -196,12 +250,16 @@ export default function Analyze() {
   const playClip = (a) => {
     const start = Math.max(0, (a.clip_start != null ? a.clip_start : a.timestamp - (a.clip_before ?? 5)));
     clipStop.current = Math.min(duration || 1e9, (a.clip_end != null ? a.clip_end : a.timestamp + (a.clip_after ?? 4)));
+    if (!drafting) { setAnnos(a.annotations || []); activeAnnosRef.current = a.annotations || []; }
+    else { activeAnnosRef.current = annos; }
+    pausedForRef.current = new Set();
     playerRef.current?.seekTo(start); playerRef.current?.play(); setPlaying(true);
   };
-  const previewDraftClip = () => { clipStop.current = clipEnd; playerRef.current?.seekTo(clipStart); playerRef.current?.play(); setPlaying(true); };
+  const previewDraftClip = () => { activeAnnosRef.current = annos; pausedForRef.current = new Set(); clipStop.current = clipEnd; playerRef.current?.seekTo(clipStart); playerRef.current?.play(); setPlaying(true); };
 
   const undo = () => setAnnos((a) => a.slice(0, -1));
   const delSelEl = () => { if (selEl) { setAnnos((a) => a.filter((e) => e.id !== selEl)); setSelEl(null); } };
+  const togglePin = () => { if (!selEl) return; setAnnos((a) => a.map((e) => (e.id === selEl ? { ...e, pinned: !e.pinned } : e))); };
   const markComplete = async () => { await setVideoStatus(videoId, "concluido"); setVideo((v) => ({ ...v, status: "concluido" })); toast.success("Análise concluída!"); };
 
   const toggleRally = (id) => setRallySel((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
@@ -212,6 +270,12 @@ export default function Analyze() {
   };
 
   if (!video) return <Layout back="/galeria"><div className="text-muted-foreground">Carregando análise...</div></Layout>;
+
+  const saqueCount = actions.filter((a) => (a.fundamento_name || "").toLowerCase() === "saque").length;
+  const sideOutCount = rallies.filter((r) => r.serving_team && r.winner && r.winner !== r.serving_team).length;
+  const pointsNos = rallies.filter((r) => r.winner === "nos").length;
+  const pointsAdv = rallies.filter((r) => r.winner === "adv").length;
+  const pad3 = (n) => String(n).padStart(3, "0");
 
   return (
     <Layout back="/galeria">
@@ -231,6 +295,12 @@ export default function Analyze() {
       {/* SCOREBOARD + PONTO */}
       <div className="rounded-xl border border-border bg-card p-3 mb-4 flex flex-wrap items-center gap-3">
         <Scoreboard home={video.equipe_name || "AVA"} away={video.opponent || "Adversário"} score={scoreAt(time, setNumber)} set={setNumber} serving={servingTeam} onServe={setServingTeam} />
+        <div className="flex items-center gap-1.5 flex-wrap" data-testid="match-counters">
+          <span className="rounded-md bg-secondary px-2 py-1 text-[11px] font-data font-semibold">Saque {pad3(saqueCount)}</span>
+          <span className="rounded-md bg-secondary px-2 py-1 text-[11px] font-data font-semibold">Side-out {pad3(sideOutCount)}</span>
+          <span className="rounded-md bg-secondary px-2 py-1 text-[11px] font-data font-semibold">Rallies {pad3(rallies.length)}</span>
+          <span className="rounded-md bg-primary/15 text-primary px-2 py-1 text-[11px] font-data font-semibold">Pontos {video.equipe_name || "AVA"} {pointsNos} · {video.opponent || "ADV"} {pointsAdv}</span>
+        </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground uppercase tracking-wider">Set</span>
           <select data-testid="set-select" value={setNumber} onChange={(e) => setSetNumber(Number(e.target.value))} className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm outline-none">{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select>
@@ -257,7 +327,7 @@ export default function Analyze() {
         <div className="lg:col-span-3 space-y-3">
           <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-border bg-black">
             <VideoPlayer ref={playerRef} video={video} onTime={onTime} onDuration={setDuration} />
-            <AnnotationLayer elements={annos} onChange={setAnnos} tool={tool} color={color} strokeWidth={width} editable={drafting} selectedId={selEl} onSelect={setSelEl} />
+            <AnnotationLayer elements={annos} onChange={setAnnos} tool={tool} color={color} strokeWidth={width} currentTime={time} editable={drafting} selectedId={selEl} onSelect={setSelEl} onToolDone={() => setTool("select")} />
           </div>
 
           <div className="rounded-xl border border-border bg-card p-3 space-y-3">
@@ -277,12 +347,16 @@ export default function Analyze() {
             <div className="rounded-xl border border-border bg-card p-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1">Desenho</span>
-                {TOOLS.map((t) => { const Icon = t.icon; return <button key={t.id} data-testid={`tool-${t.id}`} onClick={() => setTool(t.id)} className={cn("rounded-lg border p-2 transition", tool === t.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/40")}><Icon size={16} /></button>; })}
+                {TOOLS.map((t) => { const Icon = t.icon; return <button key={t.id} data-testid={`tool-${t.id}`} onClick={() => { setTool(t.id); if (t.id === "highlight") setColor("#F59E0B"); }} className={cn("rounded-lg border p-2 transition", tool === t.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/40")}><Icon size={16} /></button>; })}
                 <div className="w-px h-6 bg-border mx-1" />
                 {COLORS.map((c) => <button key={c} data-testid={`color-${c.replace("#", "")}`} onClick={() => setColor(c)} className={cn("h-7 w-7 rounded-full border-2", color === c ? "border-foreground scale-110" : "border-transparent")} style={{ background: c }} />)}
                 <input type="range" min={2} max={10} value={width} onChange={(e) => setWidth(Number(e.target.value))} className="w-16 accent-[#E50914]" data-testid="stroke-width" />
                 <button onClick={undo} data-testid="undo-anno" className="rounded-lg border border-border p-2 text-muted-foreground hover:border-primary/40"><Undo2 size={16} /></button>
                 <button onClick={delSelEl} disabled={!selEl} data-testid="del-element" className="rounded-lg border border-border p-2 text-muted-foreground hover:border-primary/40 disabled:opacity-40"><Trash2 size={16} /></button>
+                <button onClick={togglePin} disabled={!selEl} data-testid="toggle-pin" title="Fixar marcação no trecho inteiro" className={cn("rounded-lg border p-2 transition disabled:opacity-40", annos.find((e) => e.id === selEl)?.pinned ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/40")}><Pin size={16} /></button>
+                <div className="w-px h-6 bg-border mx-1" />
+                <button onClick={() => setAutoPause((a) => !a)} data-testid="toggle-autopause" title="Pausa automática nas marcações" className={cn("rounded-lg border p-2 transition", autoPause ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/40")}>{autoPause ? <Timer size={16} /> : <TimerOff size={16} />}</button>
+                <span className="text-[11px] text-muted-foreground">pausa {autoPause ? "ligada" : "desligada"}</span>
               </div>
             </div>
           )}
@@ -300,9 +374,29 @@ export default function Analyze() {
               {/* clip trim */}
               <div className="rounded-lg border border-border bg-background p-3 mb-3">
                 <div className="flex items-center justify-between text-xs mb-2"><span className="font-semibold text-muted-foreground">RECORTE</span><span className="font-data text-primary">{formatTime(clipStart)} → {formatTime(clipEnd)} · {formatTime(markTime)}</span></div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-[11px] text-muted-foreground">Antes (s)<input type="number" data-testid="clip-before-field" value={form.clip_before} onChange={(e) => setForm({ ...form, clip_before: e.target.value })} className="w-full mt-0.5 rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-data outline-none focus:border-primary/60" /></label>
-                  <label className="text-[11px] text-muted-foreground">Depois (s)<input type="number" data-testid="clip-after-field" value={form.clip_after} onChange={(e) => setForm({ ...form, clip_after: e.target.value })} className="w-full mt-0.5 rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-data outline-none focus:border-primary/60" /></label>
+                <ClipTrimBar
+                  before={Number(form.clip_before || 0)}
+                  after={Number(form.clip_after || 0)}
+                  onBefore={(v) => setForm((fm) => ({ ...fm, clip_before: Number(v.toFixed(1)) }))}
+                  onAfter={(v) => setForm((fm) => ({ ...fm, clip_after: Number(v.toFixed(1)) }))}
+                />
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <span className="text-[11px] text-muted-foreground">Antes (s)</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <button data-testid="clip-before-minus" onClick={() => setForm((fm) => ({ ...fm, clip_before: Math.max(0, Number(fm.clip_before || 0) - 1) }))} className="rounded-lg border border-border px-2 py-1.5 text-sm hover:border-primary/40"><Minus size={13} /></button>
+                      <input type="number" data-testid="clip-before-field" value={form.clip_before} onChange={(e) => setForm({ ...form, clip_before: e.target.value })} className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-data outline-none focus:border-primary/60" />
+                      <button data-testid="clip-before-plus" onClick={() => setForm((fm) => ({ ...fm, clip_before: Number(fm.clip_before || 0) + 1 }))} className="rounded-lg border border-border px-2 py-1.5 text-sm hover:border-primary/40"><Plus size={13} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-muted-foreground">Depois (s)</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <button data-testid="clip-after-minus" onClick={() => setForm((fm) => ({ ...fm, clip_after: Math.max(0, Number(fm.clip_after || 0) - 1) }))} className="rounded-lg border border-border px-2 py-1.5 text-sm hover:border-primary/40"><Minus size={13} /></button>
+                      <input type="number" data-testid="clip-after-field" value={form.clip_after} onChange={(e) => setForm({ ...form, clip_after: e.target.value })} className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-sm font-data outline-none focus:border-primary/60" />
+                      <button data-testid="clip-after-plus" onClick={() => setForm((fm) => ({ ...fm, clip_after: Number(fm.clip_after || 0) + 1 }))} className="rounded-lg border border-border px-2 py-1.5 text-sm hover:border-primary/40"><Plus size={13} /></button>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex gap-2 mt-2">
                   <button data-testid="set-start-now" onClick={() => setForm({ ...form, clip_before: Math.max(0, (markTime - time)).toFixed(1) })} className="flex-1 rounded-lg border border-border py-1.5 text-[11px] hover:border-primary/40">Início = tempo atual</button>

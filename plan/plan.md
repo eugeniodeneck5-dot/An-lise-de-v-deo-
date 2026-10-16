@@ -1,60 +1,69 @@
-# Análise de Vídeo — Manter como está, corrigir, finalizar e preparar para o site dos atletas
+# Tela de Análise — editor de trecho, marcações com realce e tempo, e placar corrigido
 
-Reconstrução **fiel** do projeto enviado (mesmas funções, mesmo visual, mesmo comportamento), corrigindo erros e completando o que falta.
-Além disso, o código será **organizado para o futuro**: ligar cada análise a um atleta e preparar o app para, mais tarde, viver dentro do seu outro site (dos atletas), puxando os atletas de lá e enviando as análises de volta.
+Melhorias na tela onde o vídeo é analisado: um editor de trecho em destaque que abre junto com o painel de classificação, marcações de desenho com realce translúcido e presas ao momento exato do lance, e um topo com as informações da partida e o placar funcionando certo.
+Nada do que já funciona é removido — só é corrigido o que está com problema e acrescentado o que foi pedido.
 
 ## Para quem é
-Você (treinador/analista) e, no futuro, seus atletas — que poderão visualizar, dentro do seu site principal, as análises de vídeo feitas para cada um.
+Você (treinador/analista), que marca os lances assistindo ao vídeo e precisa editar o trecho, desenhar sobre a jogada e acompanhar o placar sem travar.
 
-## Princípio central (o que será e o que NÃO será feito)
-- **NÃO mudar** nenhuma função, visual ou fluxo que já funciona no código enviado.
-- **Recriar fielmente** o projeto, do jeito que está.
-- **Corrigir** apenas erros reais e **completar** o que estiver incompleto para finalizar.
-- **Adicionar** o cadastro de atletas e a preparação para integração como **extras aditivos**, sem alterar o comportamento atual do app.
+## Funcionalidades e experiência
 
-## Fase 1 — MVP (agora)
-### a) Preservar e consertar (prioridade)
-1. Extrair e revisar o código enviado, função por função.
-2. Mapear o que funciona (mantém intacto), o que está quebrado (corrige) e o que está incompleto (finaliza).
-3. Testar de ponta a ponta e entregar um relatório: "isto estava quebrado → corrigido", "isto faltava → concluído".
+### 1. Corrigir a ferramenta de texto (bug)
+- Hoje, com a ferramenta "Texto" ativa, **todo clique na tela abre a caixa de texto de novo** e você não consegue mais mexer em nada.
+- Correção: depois de escrever um texto, a ferramenta volta sozinha para o modo "selecionar", então os cliques seguintes voltam a mover/selecionar normalmente. Cancelar a caixa (sem escrever) não cria nada.
 
-### b) Cadastro de atletas + vínculo com análises (adição)
-- Tela simples para **adicionar/editar atletas** (nome e dados básicos).
-- Cada **análise de vídeo pode ser ligada a um atleta**.
-- Página por atleta mostrando as análises daquele atleta, com:
-  - resumo de cada vídeo analisado,
-  - **frequência/assiduidade** (quantas análises, com que regularidade),
-  - **evolução ao longo do tempo** (histórico das análises por data).
-- O app continua funcionando mesmo para análises **sem atleta** vinculado (nada do fluxo atual quebra).
+### 2. Editor de trecho em destaque, aberto junto com o painel
+- Ao clicar num fundamento (ex.: "Saque") na barra ⚡, o vídeo entra em **modo trecho**: foca só nos ~20s do lance (o recorte "antes/depois" de hoje), e o **painel de classificação abre ao lado ao mesmo tempo**, para você classificar enquanto assiste àquele pedaço — tudo numa tela só, para acelerar.
+- No editor do trecho dá para:
+  - **Reproduzir o recorte** (toca uma vez, com play/pausa manual — sem repetir em loop),
+  - **Aumentar ou diminuir o recorte** por alças de arrastar nas pontas e por botões "+/−" (os campos "antes/depois" em segundos continuam existindo),
+  - Usar os controles de sempre (voltar/avançar, 0,25x/0,5x/1x, quadro a quadro).
+- A classificação ao lado mantém **tudo que já existe**: equipe da ação, fundamento, classificação, atletas, set, formação, fase tática, posição no lance, resultado, **mapa da quadra** (a marcação na linha da quadra, que fica boa, é mantida) e observações.
+- Fora do modo trecho, o vídeo volta a ser o vídeo cheio, como hoje.
 
-### c) Preparação para o site dos atletas (estrutural, sem conectar ainda)
-- Cada atleta terá um identificador próprio e um campo reservado de **"ID externo"** para, no futuro, casar com o atleta correspondente do seu outro site.
-- Uma **camada de integração** separada e isolada, hoje "vazia/local", pronta para depois:
-  - **puxar a lista de atletas** do outro site,
-  - **enviar as análises** (resumo, transcrição, frequência, evolução) de volta para o outro site.
-- O app será montado para poder ser **embutido como uma página dentro do seu outro site** (funciona dentro de um iframe/área do site, sem depender de uma navegação própria pesada).
-- Nada disso se conecta a nada externo agora — fica preparado para quando você tiver acesso ao outro projeto.
+### 3. Marcações de desenho: realce translúcido + presas ao tempo
+- **Realce (marca-texto):** nova ferramenta que pinta uma área com **preenchimento translúcido** (amarelo por padrão, com escolha de cor), para destacar sem ser só o contorno. As formas atuais (seta, linha, retângulo, elipse, trajetória, texto) continuam.
+- **Presas ao momento exato:** cada marcação fica ligada ao instante do vídeo em que foi feita. Ao reproduzir o trecho, **o vídeo pausa sozinho naquele instante e mostra o desenho** (ex.: parar no "braço baixo" com a seta em cima); ao dar play de novo, segue.
+- **Fixar no trecho inteiro:** cada marcação tem a opção de ficar **visível durante todo o trecho** (não some e não pausa), para quando você quiser deixar algo marcado o tempo todo.
+- **Ligar/desligar a pausa automática:** um botão controla se o vídeo pausa nas marcações ou só as mostra sem parar.
 
-## Melhorias opcionais (só se você aprovar — não alteram o que existe)
-- Busca por título de vídeo e por atleta; filtro por situação (analisado / não analisado).
-- Exportar a análise/transcrição (PDF ou TXT) para entregar ao atleta.
-- Perguntas e respostas sobre o vídeo (chat).
-- Transcrição com marcação de tempo (clicar no texto pula para o momento do vídeo).
+### 4. Topo com informações da partida + placar corrigido
+- Uma **faixa no topo** mostra as informações do vídeo e contadores da análise: título/categoria/adversário, **placar atual**, nº de **saques** marcados, nº de **side-outs**, nº de rallies e pontos de cada lado — no estilo "Saque 001 · Side-out 001".
+- **Corrigir o placar:** revisar o método para os pontos aparecerem e somarem corretamente (quem saca, ponto nosso/adversário, troca de vencedor recalculando), deixando o placar claro e confiável. O placar continua podendo acompanhar o tempo do vídeo.
 
-## Fase 2 — Conectar ao site dos atletas (quando você tiver acesso)
-- Ligar a camada de integração ao seu outro site: importar atletas reais e enviar as análises para que cada atleta visualize as suas.
-- Autenticação/permissão conforme as regras do seu site principal.
+## Fluxo de uso
+1. Abre o vídeo e assiste.
+2. No momento do lance, clica no fundamento na barra ⚡ → o vídeo foca no trecho e o painel de classificação abre ao lado.
+3. Ajusta o recorte (alças/"+/−"), reproduz o trecho, desenha (realce/seta/etc.) presando ao instante, marca a quadra e preenche a classificação.
+4. Salva (ou "salvar e continuar"). Ao reproduzir depois, o trecho pausa nas marcações e mostra os desenhos.
+5. Encerra o rally em "ponto de…" e o placar/contadores no topo atualizam.
 
-## Fase 3 — Avançado (futuro)
-- Painéis de comparação entre atletas, metas e alertas de frequência.
-- Compartilhamento individual por link.
+## Visual e sensação
+- Mantém a identidade atual (vermelho/preto AVA, mesmas fontes e componentes). As novidades entram no mesmo estilo, sem redesenhar a tela.
+- Editor de trecho com aparência de "recorte" (barra do segmento com alças), painel de classificação ao lado, topo compacto com placar e contadores.
+
+## Fases de implementação
+
+### Fase 1 — MVP (feito agora)
+- Correção do bug da ferramenta de texto.
+- Editor de trecho em destaque abrindo junto com o painel (reproduzir uma vez, aumentar/diminuir recorte por alças e "+/−").
+- Ferramenta de realce translúcido (com cor) + marcações presas ao instante com pausa automática, opção de fixar no trecho todo e botão liga/desliga da pausa.
+- Topo com informações da partida e contadores (saques, side-outs, rallies, pontos) + correção do método do placar.
+
+### Fase 2 — Refinos (depois, se quiser)
+- Exportar o trecho com as marcações (clipe/imagem) para enviar ao atleta.
+- Repetição (loop) opcional do trecho e atalhos de teclado para marcar mais rápido.
+- Biblioteca de marcações reutilizáveis (modelos de desenho).
+
+### Fase 3 — Avançado (futuro)
+- Linha do tempo visual com todas as marcações sobre a barra do vídeo.
+- Comparação lado a lado de dois trechos.
 
 ## Suposições
-- O comportamento e o visual de referência são **o que estiver no código enviado**; em qualquer dúvida, o original prevalece e é apenas corrigido.
-- A IA será mantida como já estiver no código; se faltar chave para uma função existente, será usada a **Universal Key da Emergent** (sem custo de chave para você), com o modelo **Gemini 3.1 Pro** para analisar vídeo (resumo/tópicos) e gerar transcrição.
-- Os vídeos serão guardados no **armazenamento de objetos da Emergent** (se o projeto já guardar de outra forma, essa forma é preservada; se estiver incompleta, é finalizada).
-- No MVP **não há login**; o controle de acesso real virá na Fase 2, seguindo as regras do seu site principal.
-- O cadastro de atletas do MVP é **local** e provisório; ele foi desenhado para depois ser substituído/alimentado pelos atletas do seu outro site, sem perder as análises já feitas (via o campo de "ID externo").
-- Dados por atleta considerados importantes (decididos por padrão): resumo das análises, frequência/assiduidade e evolução ao longo do tempo. Dá para ajustar quando conectar ao outro site.
-- Idioma da interface: Português (Brasil) / o mesmo do projeto original.
-- Observação: o conteúdo exato do .zip não pôde ser aberto no planejamento; a revisão detalhada função por função acontece no início da construção, e o relatório final dirá exatamente o que foi corrigido e completado.
+- "Segunda aba" = editor de trecho **dentro do app**, aberto **junto com o painel** de classificação (não uma aba do navegador).
+- O recorte reproduz **uma vez** (play/pausa manual), sem loop automático.
+- Realce translúcido com **amarelo como padrão** e troca de cor pelas cores já existentes.
+- Pausa automática nas marcações **vem ligada por padrão**, com botão para desligar; cada marcação pode ser fixada no trecho inteiro.
+- "Side-out" é contado como rally vencido por quem estava recebendo o saque; "Saque" conta os lances de saque marcados. Esses contadores são da análise do vídeo atual.
+- O placar continua derivado dos rallies/pontos encerrados; a correção garante soma e exibição corretas, sem mudar a forma de encerrar o ponto.
+- Idioma e identidade visual permanecem os atuais (PT-BR, tema AVA). Nenhuma função atual é removida.

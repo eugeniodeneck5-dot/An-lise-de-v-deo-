@@ -13,6 +13,7 @@ export const AnnotationLayer = ({
   editable = true,
   selectedId,
   onSelect,
+  onToolDone,
 }) => {
   const svgRef = useRef(null);
   const [draft, setDraft] = useState(null);
@@ -28,6 +29,7 @@ export const AnnotationLayer = ({
 
   const visible = (el) => {
     if (editable) return true;
+    if (el.pinned) return true;
     if (el.startTime == null) return true;
     return currentTime >= el.startTime && currentTime <= (el.endTime ?? el.startTime + 5);
   };
@@ -38,11 +40,12 @@ export const AnnotationLayer = ({
     if (tool === "select") return;
     if (tool === "text") {
       const text = window.prompt("Texto da marcação:");
-      if (text) onChange([...elements, { id: uid(), type: "text", x1: p.x, y1: p.y, text, color, strokeWidth, startTime: null }]);
+      if (text) onChange([...elements, { id: uid(), type: "text", x1: p.x, y1: p.y, text, color, strokeWidth, startTime: currentTime }]);
+      onToolDone && onToolDone();
       return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDraft({ id: uid(), type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, points: [p], color, strokeWidth, startTime: null });
+    setDraft({ id: uid(), type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, points: [p], color, strokeWidth, startTime: currentTime });
   };
 
   const onMove = (e) => {
@@ -109,6 +112,28 @@ export const AnnotationLayer = ({
     if (el.type === "rect") {
       const x = Math.min(el.x1, el.x2), y = Math.min(el.y1, el.y2);
       return <rect key={key} x={x} y={y} width={Math.abs(el.x2 - el.x1)} height={Math.abs(el.y2 - el.y1)} rx={0.01} {...common} {...extra} />;
+    }
+    if (el.type === "highlight") {
+      const x = Math.min(el.x1, el.x2), y = Math.min(el.y1, el.y2);
+      return (
+        <rect
+          key={key}
+          x={x}
+          y={y}
+          width={Math.abs(el.x2 - el.x1)}
+          height={Math.abs(el.y2 - el.y1)}
+          rx={0.008}
+          fill={el.color}
+          fillOpacity={0.3}
+          stroke={el.color}
+          strokeOpacity={0.6}
+          strokeWidth={(el.strokeWidth || 4) / 4}
+          vectorEffect="non-scaling-stroke"
+          style={{ cursor: editable && tool === "select" ? "move" : "crosshair" }}
+          onPointerDown={(e) => startDrag(e, el)}
+          {...extra}
+        />
+      );
     }
     if (el.type === "ellipse") {
       const cx = (el.x1 + el.x2) / 2, cy = (el.y1 + el.y2) / 2;
