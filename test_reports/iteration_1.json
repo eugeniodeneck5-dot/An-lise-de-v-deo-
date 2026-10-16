@@ -1,0 +1,35 @@
+{
+  "summary": "Full backend + frontend regression of reconstructed AVA Volei Analytics. 51/52 pytest cases pass (1 skipped — alternate AI test when 502). Smoke-tested all key pages (/, /galeria, /atletas, /relatorios, /ia, /configuracoes), athlete creation with new external_id field (data-testid=athlete-external-id) via UI, gallery search/filter, navigation into /analisar/:id with video player + quick-mark bar + point-nos/point-adv, and AI /api/ai/analyze returning a grounded Portuguese answer via Claude. New integration layer (/api/integration/status|pull-athletes|push-analyses) behaves as no-op with enabled:false/mode:local as spec'd.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/relatorios (empty load)", "issues": ["Recharts warning: 'width(-1) and height(-1) of chart should be greater than 0' — chart renders inside a hidden/zero-size container on initial mount. Non-blocking but worth guarding with minWidth/minHeight."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_ava_v3.py",
+    "/app/backend/tests/test_additions.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: wrap Recharts ResponsiveContainer in a sized parent on /relatorios to silence width/height=-1 warnings when tab mounts hidden."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~1200 lines — consider splitting routers (videos, actions, rallies, ai, stats) into modules for maintainability.",
+    "integration_layer.py creates its own AsyncIOMotorClient (duplicates Mongo connection). Prefer sharing the client from server.py to avoid two pools.",
+    "/api/integration/push-analyses requires a Pydantic body — good — but there is no 404 when athlete_id is unknown; returns pushed:false with external_id:null silently. Consider 404 for clarity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_additions.py (new — covers athlete.external_id + integration layer no-op endpoints)"
+  ],
+  "success_rate": {"backend": "100% (51/51 executed, 1 skipped)", "frontend": "100% on smoke flows exercised"},
+  "test_credentials": "N/A — no auth in MVP",
+  "seed_data_creation": "Backend seed runs at startup (fundamentos, classificacoes, athletes, equipes AVA, 8 categorias, 6 formacoes, demo videos & actions). UI test created athlete TEST_UI_Atleta_* with external_id=UI-EXT-001 (not cleaned up — safe TEST_ prefix).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All CRUD + AI + integration endpoints green. Additive features (athlete.external_id, /api/integration/*) covered by test_additions.py. Known cosmetic: Recharts width/height warnings on Reports when chart tab mounts hidden. Analyze testids: quick-{fund_id}, save-action, point-nos, point-adv, set-select, team-nos/adv, fund-/class-/mark-athlete- prefixes."
+}

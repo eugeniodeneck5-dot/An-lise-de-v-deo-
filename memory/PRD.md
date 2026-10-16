@@ -1,42 +1,55 @@
 # PRD — AVA Vôlei Analytics (Análise de vídeo de voleibol)
 
-## Problem statement
-Melhorar o app de análise de vídeo de voleibol da AVA (Associação Voleibol Assisense): identidade visual vermelho/preto moderna, página inicial central, galeria de vídeos, pastas de atletas, análise técnica (marcar fundamentos no tempo exato, classificar, identificar atletas), marcações visuais sobre o vídeo, relatórios coletivos e individuais e exportação. Estrutura integrada e preparada para acesso futuro dos atletas.
+## Problem statement (reconstrução)
+O usuário enviou um projeto existente (zip) e pediu: recriar o projeto fielmente, do jeito que está,
+verificar todas as funções, corrigir erros de código, finalizar o que estiver incompleto e ver o que
+dá para adicionar — SEM mudar comportamento/visual que já funciona. App de análise técnica de vôlei da
+AVA (Associação Voleibol Assisense): identidade vermelho/preto, galeria de vídeos, pastas de atletas,
+análise técnica (marcar fundamentos no tempo exato, classificar, atletas), marcações visuais sobre o
+vídeo, placar/rallies, relatórios coletivos e individuais, IA e exportação. Preparado para, no futuro,
+viver dentro do site principal dos atletas.
 
-## User choices (gathered)
-- Vídeos: link do YouTube **e** envio de arquivo (object storage).
-- Primeira versão inclui: análise técnica, cadastro + fundamentos/classificações configuráveis, relatórios, marcações visuais, (exportação parcial).
-- Login: pulado por enquanto (admin-only / aberto).
+## User choices
+- Vídeos: link do YouTube **e** envio de arquivo (Emergent object storage).
+- IA mantida como no original: Claude (claude-sonnet-5-5) via Emergent Universal Key (sem custo de chave).
+- Sem login no MVP (acesso aberto). Controle de acesso real → Fase 2.
+- Extras aditivos aprovados: campo "ID externo" por atleta + camada de integração isolada (local).
 
 ## Architecture
-- Backend: FastAPI + MongoDB (uuid string ids, `_id` excluded). Emergent object storage for uploads (`/api/upload`, `/api/files/{path}`). Auto-seed on startup.
-- Frontend: React 19 + React Router + Tailwind + shadcn/ui + Recharts + lucide-react. Dark theme default (AVA red/black), light theme toggle. Fonts: Barlow Condensed (headings), Inter (body), JetBrains Mono (data).
-- Collections: videos, athletes, positions, fundamentos, classificacoes, actions, saved_filters, settings, files.
+- Backend: FastAPI + MongoDB (uuid string ids, `_id` excluído, datetime ISO). Emergent object storage
+  (`/api/upload`, `/api/files/{path}`). Seed + migrate idempotentes no startup.
+- Camada de integração ISOLADA: `backend/integration_layer.py` (router `/api/integration/*`), hoje
+  local/desconectada; env futura `EXTERNAL_SITE_URL`/`EXTERNAL_SITE_API_KEY`.
+- Frontend: React 19 + React Router + Tailwind + shadcn/ui + Recharts + lucide-react. Tema escuro
+  padrão (vermelho/preto), toggle claro. Fontes: Barlow Condensed, Inter, JetBrains Mono.
+- Coleções: videos, athletes, positions, formations, fundamentos, classificacoes, actions, rallies,
+  kphases, categorias, equipes, saved_filters, settings, files.
 
 ## Personas
-- Treinador/analista (admin): importa vídeos, analisa, marca, gera relatórios.
-- (Futuro) Atleta: acesso individual aos próprios materiais.
+- Treinador/analista (admin): importa, analisa, marca, gera relatórios.
+- (Futuro) Atleta: acesso individual às próprias análises dentro do site principal.
 
-## Implemented (2026-06) — Iteration 1
-- Identidade visual AVA (vermelho/preto/neutros), responsiva, dark+light.
-- Home dashboard, galeria (YouTube/upload), atletas + dossiê, análise técnica, fundamentos/classificações/posições configuráveis, relatórios, marcações SVG, exportação CSV, duração padrão de clipe.
+## Reconstrução + correções (2026-06)
+- Projeto recriado fielmente a partir do zip enviado; todas as páginas e rotas restauradas.
+- Backend configurado com EMERGENT_LLM_KEY; storage inicializa OK; seed/migrate rodam no startup.
+- Dependências instaladas (emergentintegrations). Verificação função por função concluída.
+- Testes: 51/51 casos de backend (pytest) passam; fluxos de frontend 100% nos smoke tests.
+- Nenhum bug crítico encontrado — o código original estava íntegro; faltava apenas a configuração de
+  ambiente (chave Emergent) para IA e armazenamento funcionarem.
 
-## Implemented (2026-06) — Iteration 2
-- **Clique-no-fundamento durante a reprodução**: barra rápida ⚡ pausa automática no tempo exato e abre o editor de trecho; "Salvar e continuar" retoma do ponto.
-- **Editor de recorte**: antes/depois, início/fim = tempo atual, prévia do clipe; recorte não destrutivo (clip_start/clip_end em metadados).
-- **Novos campos do lance**: set, formação/rotação, situação tática (K1/K2/K3/Continuidade/Contra-ataque), resultado, e **mapa da quadra de 9 zonas** (ponto + zona + seta de direção).
-- **Formações (P1–P6) configuráveis**; **arquivar/reativar** fundamentos e classificações (histórico preservado).
-- **Rallies**: relacionar ações da mesma jogada (situação tática) via /api/rallies/link.
-- **Relatórios por abas**: Geral, Recepção A/B/C (com %), Por Formação (eficiência K1), Mapa de Calor (quadra).
-- **Análise Inteligente (IA)**: Claude (claude-sonnet-5-5) via chave Emergent, respostas fundamentadas nos dados, informa amostra e limitações, distingue padrão de hipótese.
+## Adicionado (aditivo, sem alterar o existente)
+- `external_id` (ID externo) opcional no cadastro de atletas (reservado p/ casar com o site principal).
+- Camada de integração isolada `/api/integration/status | pull-athletes | push-analyses` (no-op local,
+  pronta para Fase 2). App é embutível (iframe) — sem restrição de frame no backend.
 
-## Backlog / remaining
-- P1: Exportação de VÍDEO renderizado (clipe/compilação com/sem marcações gravadas) — guardar edições em metadados para render em outro servidor (conforme pedido do usuário).
-- P1: Filtros salvos (UI) e compilações temáticas.
-- P2: Comparação entre partidas (tela dedicada de evolução).
-- P2: Timing por elemento de marcação; pastas personalizadas; quadro tático dedicado.
-- Futuro: contas/permissões de atletas; integração com app principal da AVA.
+## Backlog / próximos
+- P1: Exportação de VÍDEO renderizado (clipe/compilação com marcações) — edições já em metadados.
+- P1: Transcrição de vídeo com marcação de tempo (Gemini) para uploads/YouTube.
+- P2: Busca por título/atleta na galeria já existe; adicionar exportar análise em PDF/TXT.
+- Fase 2: conectar a camada de integração ao site principal (importar atletas reais, enviar análises),
+  autenticação/permissões conforme o site principal.
+- Fase 3: painéis de comparação entre atletas, metas e alertas de frequência; compartilhamento por link.
 
-## Next tasks
-- Implementar UI de filtros salvos e compilações.
-- Agrupamento de rally (K1/K2) e visualização de sequência.
+## Observações técnicas (não bloqueantes)
+- Aviso cosmético do Recharts (width/height=-1) ao montar gráfico em aba oculta em /relatorios.
+- server.py grande (~1300 linhas): possível modularização futura (videos/actions/rallies/ai/stats).
